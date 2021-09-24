@@ -117,7 +117,7 @@ func (cr *PerconaServerMongoDB) CheckNSetDefaults(platform version.Platform, log
 	timeoutSecondsDefault := int32(5)
 	initialDelaySecondsDefault := int32(90)
 	periodSecondsDefault := int32(10)
-	successThresholdDefault := int32(10)
+	successThresholdDefault := int32(1)
 	failureThresholdDefault := int32(12)
 	if cr.CompareVersion("1.4.0") >= 0 {
 		initialDelaySecondsDefault = int32(60)
@@ -264,25 +264,6 @@ func (cr *PerconaServerMongoDB) CheckNSetDefaults(platform version.Platform, log
 			}
 		}
 
-		if cr.Spec.Sharding.ConfigsvrReplSet.ReadinessProbe == nil {
-			cr.Spec.Sharding.ConfigsvrReplSet.ReadinessProbe = &corev1.Probe{}
-		}
-		if cr.Spec.Sharding.ConfigsvrReplSet.ReadinessProbe.InitialDelaySeconds == 0 {
-			cr.Spec.Sharding.ConfigsvrReplSet.ReadinessProbe.InitialDelaySeconds = 10
-		}
-		if cr.Spec.Sharding.ConfigsvrReplSet.ReadinessProbe.TimeoutSeconds == 0 {
-			cr.Spec.Sharding.ConfigsvrReplSet.ReadinessProbe.TimeoutSeconds = 2
-		}
-		if cr.Spec.Sharding.ConfigsvrReplSet.ReadinessProbe.PeriodSeconds == 0 {
-			cr.Spec.Sharding.ConfigsvrReplSet.ReadinessProbe.PeriodSeconds = 3
-		}
-		if cr.Spec.Sharding.ConfigsvrReplSet.ReadinessProbe.SuccessThreshold == 0 {
-			cr.Spec.Sharding.ConfigsvrReplSet.ReadinessProbe.SuccessThreshold = 1
-		}
-		if cr.Spec.Sharding.ConfigsvrReplSet.ReadinessProbe.FailureThreshold == 0 {
-			cr.Spec.Sharding.ConfigsvrReplSet.ReadinessProbe.FailureThreshold = 3
-		}
-
 		repls = append(repls, cr.Spec.Sharding.ConfigsvrReplSet)
 	}
 
@@ -337,6 +318,9 @@ func (cr *PerconaServerMongoDB) CheckNSetDefaults(platform version.Platform, log
 			replset.LivenessProbe = new(LivenessProbeExtended)
 		}
 
+		if replset.LivenessProbe.StartupDelaySeconds == 0 {
+			replset.LivenessProbe.StartupDelaySeconds = 2 * 60 * 60
+		}
 		if replset.LivenessProbe.Exec == nil {
 			replset.LivenessProbe.Exec = &corev1.ExecAction{
 				Command: []string{"mongodb-healthcheck", "k8s", "liveness"},
@@ -375,9 +359,6 @@ func (cr *PerconaServerMongoDB) CheckNSetDefaults(platform version.Platform, log
 		if replset.LivenessProbe.FailureThreshold == 0 {
 			replset.LivenessProbe.FailureThreshold = failureThresholdDefault
 		}
-		if replset.LivenessProbe.StartupDelaySeconds == 0 {
-			replset.LivenessProbe.StartupDelaySeconds = 2 * 60 * 60
-		}
 
 		if replset.ReadinessProbe == nil {
 			replset.ReadinessProbe = &corev1.Probe{}
@@ -403,6 +384,9 @@ func (cr *PerconaServerMongoDB) CheckNSetDefaults(platform version.Platform, log
 		}
 		if replset.ReadinessProbe.FailureThreshold == 0 {
 			replset.ReadinessProbe.FailureThreshold = 8
+			if cr.CompareVersion("1.11.0") >= 0 && replset.Name != ConfigReplSetName {
+				replset.ReadinessProbe.FailureThreshold = 3
+			}
 		}
 
 		if cr.CompareVersion("1.6.0") >= 0 && len(replset.ServiceAccountName) == 0 {
